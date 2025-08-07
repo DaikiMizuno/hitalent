@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>27卒 採用戦略インタラクティブ分析ダッシュボード</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Calm Harmony -->
+    <!-- Application Structure Plan: A thematic dashboard SPA designed for strategic analysis. The structure is not linear like the report but organized into four key user tasks: 1) Overview (Executive Summary & Key Trends), 2) Competitor Deep Dive (Click a company to see all its data synthesized in one view), 3) Thematic Analysis (Interactive charts and diagrams for cross-company comparison on Salary, Internships, Channels, and Targeting), and 4) Recommendations. This structure allows users to fluidly move from high-level trends to specific company details and back to comparative analysis, facilitating deeper insights than a static report. The core interaction is the 'Competitor Deep Dive' which aggregates data from multiple report tables into a single, easy-to-digest view for a selected company. -->
+    <!-- Visualization & Content Choices: 
+        - Executive Summary: Goal: Inform/Hook. Method: Large text & a Bar Chart (Chart.js) for salary overview. Interaction: Hover on bars.
+        - Competitor Deep Dive: Goal: Organize/Inform. Method: Clickable logo grid updating a central detail panel. Interaction: Click to update DOM. Justification: Synthesizes disparate report data into a single view per company, which is the most critical user task.
+        - Salary Analysis: Goal: Compare. Method: Bar Chart (Chart.js). Interaction: Tooltips with growth story context.
+        - Internship Analysis: Goal: Compare/Organize. Method: HTML/Tailwind grid diagram. Interaction: Filtering. Justification: More visual and engaging than a simple table.
+        - Channel Analysis: Goal: Organize/Relate. Method: HTML/Tailwind matrix diagram. Interaction: Hover for details. Justification: Clearly shows the ecosystem.
+        - Targeting Analysis: Goal: Compare/Highlight Paradox. Method: Grouped Bar Chart (Chart.js). Justification: Visually represents the 'stated vs. actual' discrepancy effectively.
+        - Library/Method: Chart.js for all charts (Canvas-based), Vanilla JS for all interactions and DOM manipulation, Tailwind CSS for layout and styling. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #F8F7F4;
+            color: #4A4A4A;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 400px;
+            max-height: 50vh;
+        }
+        @media (max-width: 768px) {
+            .chart-container {
+                height: 300px;
+                max-height: 60vh;
+            }
+        }
+        .nav-button {
+            transition: all 0.3s ease;
+        }
+        .nav-button.active {
+            background-color: #4A4A4A;
+            color: #F8F7F4;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .tab-button.active {
+            border-color: #E07A5F;
+            color: #E07A5F;
+            font-weight: 700;
+        }
+        .company-logo {
+            transition: all 0.3s ease;
+            filter: grayscale(100%);
+            opacity: 0.6;
+        }
+        .company-logo:hover, .company-logo.active {
+            filter: grayscale(0%);
+            opacity: 1;
+            transform: scale(1.05);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        .card {
+            background-color: #FFFFFF;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+            transition: all 0.3s ease;
+        }
+        .section-title {
+            border-bottom: 2px solid #A8DADC;
+        }
+        .accent-color { color: #E07A5F; }
+        .bg-accent-light { background-color: #FCEFEA; }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="min-h-screen container mx-auto px-4 py-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">27卒 採用戦略インタラクティブ分析ダッシュボード</h1>
+            <p class="mt-2 text-gray-600">ハイタレント株式会社様向け 競合採用戦略分析</p>
+        </header>
+
+        <nav class="flex justify-center space-x-2 md:space-x-4 mb-12 bg-white p-2 rounded-full shadow-sm sticky top-4 z-50">
+            <button data-target="overview" class="nav-button active px-4 py-2 rounded-full text-sm md:text-base font-semibold">サマリー</button>
+            <button data-target="deep-dive" class="nav-button px-4 py-2 rounded-full text-sm md:text-base font-semibold">競合深掘り</button>
+            <button data-target="analysis" class="nav-button px-4 py-2 rounded-full text-sm md:text-base font-semibold">戦略テーマ分析</button>
+            <button data-target="recommendations" class="nav-button px-4 py-2 rounded-full text-sm md:text-base font-semibold">戦略提言</button>
+        </nav>
+
+        <main>
+            <section id="overview" class="space-y-12">
+                <div>
+                    <h2 class="text-2xl font-bold mb-4 pb-2 section-title">エグゼクティブ・サマリー：27卒採用市場の3大トレンド</h2>
+                    <p class="text-gray-700 mb-6">本レポートの分析から、27卒採用市場は3つの主要トレンドによって定義されることが明らかになりました。これらのトレンドは、従来の採用活動の前提を覆すものであり、迅速な対応が求められます。</p>
+                    <div class="grid md:grid-cols-3 gap-6 text-center">
+                        <div class="card p-6">
+                            <div class="text-5xl font-bold accent-color">1</div>
+                            <h3 class="text-xl font-bold mt-4 mb-2">極端な早期化</h3>
+                            <p class="text-gray-600">多くの競合は大学3年の夏前にサマーインターンの受付を開始。優秀層との接触機会を先んじて確保する動きが加速しています。</p>
+                        </div>
+                        <div class="card p-6">
+                            <div class="text-5xl font-bold accent-color">2</div>
+                            <h3 class="text-xl font-bold mt-4 mb-2">選考直結インターン</h3>
+                            <p class="text-gray-600">インターンは事実上の「主戦場」です。候補者のスキルとカルチャーフィットを見極める高精度な選考プロセスとして機能しています。</p>
+                        </div>
+                        <div class="card p-6">
+                            <div class="text-5xl font-bold accent-color">3</div>
+                            <h3 class="text-xl font-bold mt-4 mb-2">高報酬＋急成長</h3>
+                            <p class="text-gray-600">年収500万円超の初任給と、入社後数年でのリーダー昇格といった具体的なキャリアパスの提示が標準となっています。</p>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-bold mb-4 pb-2 section-title">初任給・想定年収比較</h2>
+                    <p class="text-gray-700 mb-6 text-center">競争力のある報酬は、トップタレントの検討リストに入るための最低条件です。以下のチャートで主要競合の初任給水準を概観できます。</p>
+                    <div class="card p-4 md:p-6">
+                        <div class="chart-container">
+                            <canvas id="salaryChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="deep-dive" class="hidden space-y-12">
+                 <h2 class="text-2xl font-bold mb-4 pb-2 section-title">競合深掘り分析</h2>
+                 <p class="text-gray-700 mb-6">ここでは、競合各社の採用戦略を個別に深掘りします。下のロゴをクリックすると、給与、インターン戦略、採用チャネル、ターゲット層など、その企業に関する全ての重要情報がまとめて表示されます。レポートの情報を横断的に確認し、各社の全体像を素早く把握しましょう。</p>
+                <div class="grid grid-cols-3 sm:grid-cols-5 gap-4 mb-8">
+                </div>
+                <div id="companyDetail" class="card p-6 md:p-8 min-h-[400px] flex items-center justify-center">
+                    <p class="text-gray-500 text-lg">上のロゴをクリックして企業詳細を表示</p>
+                </div>
+            </section>
+
+            <section id="analysis" class="hidden space-y-12">
+                <h2 class="text-2xl font-bold mb-4 pb-2 section-title">戦略テーマ別 横断分析</h2>
+                <p class="text-gray-700 mb-6">ここでは、採用戦略における重要なテーマごとに、競合他社を横断的に比較分析します。下のタブをクリックして、給与、インターン、採用チャネル、ターゲット大学の各テーマにおける競合のポジショニングを確認してください。</p>
+                <div class="border-b border-gray-200">
+                    <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+                        <button data-tab="analysis-salary" class="tab-button active shrink-0 border-b-2 border-transparent px-1 pb-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">報酬と成長</button>
+                        <button data-tab="analysis-internship" class="tab-button shrink-0 border-b-2 border-transparent px-1 pb-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">インターン戦略</button>
+                        <button data-tab="analysis-channels" class="tab-button shrink-0 border-b-2 border-transparent px-1 pb-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">採用チャネル</button>
+                        <button data-tab="analysis-targeting" class="tab-button shrink-0 border-b-2 border-transparent px-1 pb-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">大学ターゲティング</button>
+                    </nav>
+                </div>
+                <div id="analysis-content" class="mt-8">
+                </div>
+            </section>
+
+            <section id="recommendations" class="hidden space-y-8">
+                <h2 class="text-2xl font-bold mb-4 pb-2 section-title">ハイタレント株式会社への戦略提言</h2>
+                <p class="text-gray-700 mb-6">これまでの分析を統合し、27卒採用市場でハイタレント株式会社が競争優位性を確保するための具体的なアクションを提言します。</p>
+                
+                <div class="card p-6">
+                    <h3 class="text-xl font-bold mb-4">市場の「ゲームのルール」の再認識</h3>
+                    <ul class="list-disc list-inside space-y-2 text-gray-700">
+                        <li><span class="font-semibold">時計は2月から動き出す：</span> 従来の3月広報解禁の前提は通用しません。</li>
+                        <li><span class="font-semibold">インターンシップが新たな面接：</span> 選考直結型の魅力的なプログラムが不可欠です。</li>
+                        <li><span class="font-semibold">報酬は入場券、成長が決め手：</span> 競争力のある初任給と、説得力のある成長物語が必要です。</li>
+                        <li><span class="font-semibold">カルチャーは磁石であり、フィルター：</span> 独自の強いカルチャー発信が、人材のマッチング精度を高めます。</li>
+                        <li><span class="font-semibold">「フィルターなし」という名のフィルター：</span> 競合は事実上のエリート採用を行っており、選考は高度化しています。</li>
+                    </ul>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div class="card p-6 bg-green-50">
+                        <h3 class="text-xl font-bold text-green-800 mb-4">機会 (Opportunities)</h3>
+                        <ul class="list-disc list-inside space-y-2 text-green-700">
+                            <li>競合が見過ごしがちな、トップ校以外の大学に在籍する高いポテンシャルを持つ学生層へのアプローチ。</li>
+                            <li>より持続可能な成長モデルや、独自のカルチャーを打ち出すことによる差別化。</li>
+                        </ul>
+                    </div>
+                    <div class="card p-6 bg-red-50">
+                        <h3 class="text-xl font-bold text-red-800 mb-4">脅威 (Threats)</h3>
+                         <ul class="list-disc list-inside space-y-2 text-red-700">
+                            <li>採用スケジュールの遅れによる機会損失。</li>
+                            <li>給与や成長機会の約束で見劣りし、優秀な候補者を競合に奪われるリスク。</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="text-xl font-bold mb-4">具体的アクションプラン</h3>
+                    <div class="space-y-4">
+                        <div class="card p-6">
+                            <h4 class="font-bold text-lg mb-2">1. チャネル戦略の再構築</h4>
+                            <p class="text-gray-600"><span class="font-semibold accent-color">即時実行：</span>「選考直結型」を明記したサマーインターンを直ちに企画・ローンチする。</p>
+                            <p class="text-gray-600"><span class="font-semibold accent-color">多様化：</span> Wantedlyなどカルチャーフィットを重視するプラットフォームへの露出を強化し、大手就職サイト依存から脱却する。</p>
+                        </div>
+                        <div class="card p-6">
+                            <h4 class="font-bold text-lg mb-2">2. バリュープロポジションの強化</h4>
+                            <p class="text-gray-600"><span class="font-semibold accent-color">報酬のベンチマーキング：</span> 競合水準を参考に、競争力のある給与体系を設定する。</p>
+                            <p class="text-gray-600"><span class="font-semibold accent-color">成長物語の構築：</span> 具体的なキャリアパスや抜擢事例をコンテンツ化し、積極的に発信する。</p>
+                             <p class="text-gray-600"><span class="font-semibold accent-color">「Why Hitalent?」の定義：</span> 独自のカルチャーやビジョンを言語化し、採用メッセージの核に据える。</p>
+                        </div>
+                        <div class="card p-6">
+                            <h4 class="font-bold text-lg mb-2">3. ターゲティングと選考プロセスの最適化</h4>
+                            <p class="text-gray-600"><span class="font-semibold accent-color">ターゲット大学の見直し：</span> 最難関大学に加え、競合が手薄な準トップ層の大学群へも集中的にアプローチする。</p>
+                            <p class="text-gray-600"><span class="font-semibold accent-color">選考内容の洗練：</span> 求めるコンピテンシーを評価するための選考手法（ケーススタディ等）を導入し、選考プロセスを精緻化する。</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const companyData = {
+                visional: {
+                    name: 'ビジョナル',
+                    category: 'HRテック',
+                    salary: '年収 5,025,000円',
+                    valueProp: '本質的な課題解決',
+                    internship: {
+                        name: 'ISSUE (1-3日間)',
+                        reward: '最大20万円',
+                        direct: 'あり（参加者全員が早期選考へ）',
+                        details: '本質的な課題発見、事業づくり体験。'
+                    },
+                    channels: ['自社サイト', 'Wantedly', '公式ブログ'],
+                    targeting: {
+                        policy: 'あまりない',
+                        actual: '東大、京大、慶應、早稲田など最難関・難関大学中心。'
+                    }
+                },
+                paradox: {
+                    name: 'パラドックス',
+                    category: 'ブランディング',
+                    salary: '年収 400万円程度',
+                    valueProp: '「志」をベースにした企業文化',
+                    internship: {
+                        name: 'Human Creative CAMP (4日間)',
+                        reward: '賞金あり（総額24万円）',
+                        direct: 'あり（入選者が参加権獲得）',
+                        details: 'コピーライティングの実践とプロによるフィードバック。'
+                    },
+                    channels: ['自社サイト', '大手就職サイト'],
+                    targeting: {
+                        policy: '不明',
+                        actual: '非公開だが、カルチャーフィットを重視。'
+                    }
+                },
+                recruit: {
+                    name: 'リクルート',
+                    category: 'HRテック/デジタルプラットフォーム',
+                    salary: '年収 470万円程度',
+                    valueProp: '圧倒的当事者意識',
+                    internship: {
+                        name: 'THE STORMING / KIKAI (7-11日間)',
+                        reward: '10万～20万円',
+                        direct: 'あり',
+                        details: '新規事業創造、課題設定、経営層への提案。'
+                    },
+                    channels: ['自社サイト', 'リクナビ', '公式ブログ'],
+                    targeting: {
+                        policy: 'ない',
+                        actual: '慶應、早稲田、東大など最難関・難関大学中心。'
+                    }
+                },
+                leverages: {
+                    name: 'レバレジーズ',
+                    category: 'HRテック/デジタルプラットフォーム',
+                    salary: '月給 350,000円',
+                    valueProp: '若手の抜擢・急成長',
+                    internship: {
+                        name: 'サマーインターン (3日間)',
+                        reward: '不明',
+                        direct: 'あり（早期選考案内）',
+                        details: '新規事業立案、ビジネスモデル考案。'
+                    },
+                    channels: ['自社サイト', 'リクナビ', 'Wantedly', '公式ブログ'],
+                    targeting: {
+                        policy: 'ない',
+                        actual: '早慶、MARCHに加え、幅広い大学から採用。'
+                    }
+                },
+                cyberagent: {
+                    name: 'サイバーエージェント',
+                    category: 'デジタルサービス',
+                    salary: '年俸 5,040,000円',
+                    valueProp: '挑戦できる環境',
+                    internship: {
+                        name: '各種コース別インターン (2日～数ヶ月)',
+                        reward: '時給2,500円～（就業型）',
+                        direct: 'あり（超早期内定直結型も）',
+                        details: '事業立案、マーケティング戦略、実務就業など多様。'
+                    },
+                    channels: ['自社サイト', '大手就職サイト', 'イベント'],
+                    targeting: {
+                        policy: 'ない',
+                        actual: '慶應、早稲田、同志社など難関大学中心。'
+                    }
+                },
+                baycurrent: {
+                    name: 'ベイカレント・コンサルティング',
+                    category: 'コンサルティング',
+                    salary: '年収 6,000,000円 (コンサルタント職)',
+                    valueProp: '次世代のリーダー輩出',
+                    internship: {
+                        name: '1dayコンサルタント体験',
+                        reward: '原則なし',
+                        direct: 'あり（超内定直結型）',
+                        details: 'ケース面接、コンサルティング業務体験。'
+                    },
+                    channels: ['自社サイト', '外資就活ドットコム', '動画選考'],
+                    targeting: {
+                        policy: 'ないが、結果的に高学歴が多い',
+                        actual: '慶應、早稲田、京大、東大など最難関大学に極めて集中。'
+                    }
+                },
+                projectcompany: {
+                    name: 'プロジェクトカンパニー',
+                    category: 'コンサルティング',
+                    salary: '月給 300,000円',
+                    valueProp: '次世代を率いる人材の輩出',
+                    internship: {
+                        name: '非公開',
+                        reward: '非公開',
+                        direct: '非公開',
+                        details: '26卒向け情報が中心。'
+                    },
+                    channels: ['自社サイト', '専門エージェント'],
+                    targeting: {
+                        policy: '不明',
+                        actual: '非公開だが、コンサル志望の優秀層が中心と推定。'
+                    }
+                },
+                libcon: {
+                    name: 'リブコンサルティング',
+                    category: 'コンサルティング',
+                    salary: '初年度500万円以上',
+                    valueProp: '社会貢献と成長スピード',
+                    internship: {
+                        name: 'インターンシップ選考 (1ヶ月実務選考)',
+                        reward: '不明',
+                        direct: 'あり（参加必須）',
+                        details: '実際の業務に近いワーク、プレゼン作成。'
+                    },
+                    channels: ['自社サイト', '外資就活ドットコム'],
+                    targeting: {
+                        policy: 'ある可能性',
+                        actual: '東大、京大、慶應、早稲田など最難関大学中心。'
+                    }
+                },
+                anymind: {
+                    name: 'Anymind',
+                    category: 'デジタルサービス/グローバル',
+                    salary: '月給 30万～42万円 (コース別)',
+                    valueProp: '世界で闘う覚悟',
+                    internship: {
+                        name: '海外渡航インターン (3泊4日)',
+                        reward: '渡航費・宿泊費無料',
+                        direct: 'あり（優秀者は最終面接確約）',
+                        details: 'グローバルビジネス体験、事業推進。'
+                    },
+                    channels: ['自社サイト', 'リクナビ', 'スカウト型', '公式ブログ'],
+                    targeting: {
+                        policy: '明らかなものはない',
+                        actual: '早慶、MARCHに加え、海外大学や中堅大学からも採用。'
+                    }
+                },
+                bitA: {
+                    name: 'ビットエー',
+                    category: 'デジタルサービス',
+                    salary: '月給 300,000円～',
+                    valueProp: 'プロフェッショナルなチーム',
+                    internship: {
+                        name: '非公開',
+                        reward: '非公開',
+                        direct: '非公開',
+                        details: 'エンジニア・ディレクター職を募集。'
+                    },
+                    channels: ['自社サイト', 'Wantedly', 'マイナビ'],
+                    targeting: {
+                        policy: '文理不問',
+                        actual: '新潟大、会津大、中央大など地方国公立・中堅私立含む広範な実績。'
+                    }
+                }
+            };
+
+            const sections = document.querySelectorAll('main > section');
+            const navButtons = document.querySelectorAll('.nav-button');
+
+            function switchSection(targetId) {
+                sections.forEach(section => {
+                    section.classList.toggle('hidden', section.id !== targetId);
+                });
+                navButtons.forEach(button => {
+                    button.classList.toggle('active', button.dataset.target === targetId);
+                });
+                window.scrollTo(0, 0);
+            }
+
+            navButtons.forEach(button => {
+                button.addEventListener('click', () => switchSection(button.dataset.target));
+            });
+
+            const salaryChartCtx = document.getElementById('salaryChart').getContext('2d');
+            const salaryChart = new Chart(salaryChartCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['ベイカレント', 'サイバーエージェント', 'ビジョナル', 'リブコンサルティング', 'リクルート', 'レバレジーズ', 'パラドックス', 'プロジェクトカンパニー', 'Anymind', 'ビットエー'],
+                    datasets: [{
+                        label: '想定年収 (万円)',
+                        data: [600, 504, 502.5, 500, 470, 420, 400, 360, 360, 360],
+                        backgroundColor: '#A8DADC',
+                        borderColor: '#86C6C7',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            title: { display: true, text: '想定年収 (万円)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${context.raw.toLocaleString()} 万円`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            const companyLogosContainer = document.querySelector('#deep-dive .grid');
+            const companyDetailContainer = document.getElementById('companyDetail');
+
+            Object.keys(companyData).forEach(key => {
+                const company = companyData[key];
+                const logoEl = document.createElement('button');
+                logoEl.className = 'company-logo card p-3 flex items-center justify-center h-20';
+                logoEl.dataset.company = key;
+                logoEl.innerHTML = `<span class="font-bold text-center text-sm">${company.name}</span>`;
+                companyLogosContainer.appendChild(logoEl);
+
+                logoEl.addEventListener('click', () => {
+                    document.querySelectorAll('.company-logo').forEach(el => el.classList.remove('active'));
+                    logoEl.classList.add('active');
+                    displayCompanyDetails(key);
+                });
+            });
+
+            function displayCompanyDetails(companyKey) {
+                const company = companyData[companyKey];
+                companyDetailContainer.innerHTML = `
+                    <div class="w-full animate-fade-in">
+                        <h3 class="text-3xl font-bold mb-2">${company.name}</h3>
+                        <p class="text-gray-500 mb-6">${company.category}</p>
+                        
+                        <div class="grid md:grid-cols-2 gap-6">
+                            <div class="bg-accent-light p-4 rounded-lg">
+                                <h4 class="font-bold text-lg mb-2">💰 バリュープロポジション</h4>
+                                <p><span class="font-semibold">給与:</span> ${company.salary}</p>
+                                <p><span class="font-semibold">コア価値:</span> ${company.valueProp}</p>
+                            </div>
+                            <div class="bg-blue-50 p-4 rounded-lg">
+                                <h4 class="font-bold text-lg mb-2">🚀 インターン戦略</h4>
+                                <p><span class="font-semibold">名称:</span> ${company.internship.name}</p>
+                                <p><span class="font-semibold">報酬:</span> ${company.internship.reward}</p>
+                                <p><span class="font-semibold">選考直結:</span> ${company.internship.direct}</p>
+                                <p class="mt-2 text-sm text-gray-600">${company.internship.details}</p>
+                            </div>
+                            <div class="bg-green-50 p-4 rounded-lg">
+                                <h4 class="font-bold text-lg mb-2">📡 採用チャネル</h4>
+                                <p>${company.channels.join(' / ')}</p>
+                            </div>
+                            <div class="bg-yellow-50 p-4 rounded-lg">
+                                <h4 class="font-bold text-lg mb-2">🎯 ターゲティング</h4>
+                                <p><span class="font-semibold">公表ポリシー:</span> ${company.targeting.policy}</p>
+                                <p class="mt-2 text-sm text-gray-600">${company.targeting.actual}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const analysisTabs = document.querySelectorAll('.tab-button');
+            const analysisContent = document.getElementById('analysis-content');
+            let targetingChart = null;
+
+            function switchAnalysisTab(tabId) {
+                analysisTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.tab === tabId));
+                
+                if (targetingChart) {
+                    targetingChart.destroy();
+                    targetingChart = null;
+                }
+
+                let content = '';
+                switch (tabId) {
+                    case 'analysis-salary':
+                        content = `
+                            <div class="card p-4 md:p-6">
+                                <h3 class="text-xl font-bold mb-4 text-center">初任給・想定年収比較</h3>
+                                <div class="chart-container"><canvas id="analysisSalaryChart"></canvas></div>
+                                <p class="mt-4 text-center text-gray-600">高い報酬は、年功序列を排した「急成長」の約束とセットで提示されています。</p>
+                            </div>
+                        `;
+                        break;
+                    case 'analysis-internship':
+                        content = `
+                            <div class="card p-4 md:p-6">
+                                <h3 class="text-xl font-bold mb-6 text-center">インターンシップ戦略比較</h3>
+                                <div class="overflow-x-auto">
+                                    <div class="grid grid-cols-5 gap-4 min-w-[700px] text-sm">
+                                        <div class="font-bold pb-2 border-b-2">企業名</div>
+                                        <div class="font-bold pb-2 border-b-2">期間</div>
+                                        <div class="font-bold pb-2 border-b-2">報酬</div>
+                                        <div class="font-bold pb-2 border-b-2">選考直結</div>
+                                        <div class="font-bold pb-2 border-b-2">特徴</div>
+                                        ${Object.values(companyData).map(c => `
+                                            <div class="font-semibold py-2 border-b">${c.name}</div>
+                                            <div class="py-2 border-b">${c.internship.name.split('(')[1]?.replace(')','')}</div>
+                                            <div class="py-2 border-b">${c.internship.reward}</div>
+                                            <div class="py-2 border-b ${c.internship.direct.includes('あり') ? 'text-green-600 font-bold' : ''}">${c.internship.direct.split('（')[0]}</div>
+                                            <div class="py-2 border-b text-xs">${c.internship.details}</div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        break;
+                    case 'analysis-channels':
+                        content = `
+                            <div class="card p-4 md:p-6">
+                                <h3 class="text-xl font-bold mb-6 text-center">採用チャネル マトリクス</h3>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full min-w-[800px] text-sm text-center">
+                                        <thead>
+                                            <tr class="border-b-2">
+                                                <th class="p-2 text-left">企業名</th>
+                                                <th>自社サイト</th>
+                                                <th>大手就活サイト</th>
+                                                <th>Wantedly</th>
+                                                <th>外資就活</th>
+                                                <th>公式ブログ</th>
+                                                <th>その他</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${Object.values(companyData).map(c => `
+                                                <tr class="border-b">
+                                                    <td class="p-2 font-semibold text-left">${c.name}</td>
+                                                    <td>${c.channels.includes('自社サイト') ? '✔️' : ''}</td>
+                                                    <td>${c.channels.some(ch => ch.includes('リクナビ') || ch.includes('マイナビ')) ? '✔️' : ''}</td>
+                                                    <td>${c.channels.includes('Wantedly') ? '✔️' : ''}</td>
+                                                    <td>${c.channels.includes('外資就活ドットコム') ? '✔️' : ''}</td>
+                                                    <td>${c.channels.includes('公式ブログ') ? '✔️' : ''}</td>
+                                                    <td>${c.channels.some(ch => !['自社サイト', 'リクナビ', 'マイナビ', 'Wantedly', '外資就活ドットコム', '公式ブログ'].includes(ch)) ? '✔️' : ''}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        `;
+                        break;
+                    case 'analysis-targeting':
+                        content = `
+                            <div class="card p-4 md:p-6">
+                                <h3 class="text-xl font-bold mb-4 text-center">「学歴フィルターなし」のパラドックス</h3>
+                                <p class="text-center text-gray-600 mb-6">多くの企業は「学歴フィルターなし」と公言しますが、採用実績は最難関大学に集中する傾向があります。</p>
+                                <div class="chart-container"><canvas id="targetingChart"></canvas></div>
+                            </div>
+                        `;
+                        break;
+                }
+                analysisContent.innerHTML = content;
+
+                if (tabId === 'analysis-salary') {
+                    new Chart(document.getElementById('analysisSalaryChart').getContext('2d'), salaryChart.config);
+                }
+                if (tabId === 'analysis-targeting') {
+                    const targetingCtx = document.getElementById('targetingChart').getContext('2d');
+                    targetingChart = new Chart(targetingCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['リクルート', 'ベイカレント', 'リブコンサル', 'サイバー', 'ビジョナル', 'レバレジーズ', 'Anymind'],
+                            datasets: [{
+                                label: '公表ポリシー (フィルターなし=100)',
+                                data: [100, 100, 50, 100, 100, 100, 100],
+                                backgroundColor: '#E0E0E0',
+                            }, {
+                                label: '実績 (最難関大学への集中度)',
+                                data: [90, 95, 95, 85, 90, 60, 50],
+                                backgroundColor: '#A8DADC',
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 110,
+                                    ticks: { display: false }
+                                },
+                                x: {
+                                    title: { display: true, text: '企業名' }
+                                }
+                            },
+                            plugins: {
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            if (context.datasetIndex === 0) return ' 公表: フィルターなし';
+                                            return ' 実績: 難関大に集中';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+            
+            analysisTabs.forEach(tab => {
+                tab.addEventListener('click', () => switchAnalysisTab(tab.dataset.tab));
+            });
+            
+            switchAnalysisTab('analysis-salary');
+        });
+    </script>
+</body>
+</html>
